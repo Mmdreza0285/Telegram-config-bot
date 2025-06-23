@@ -1,34 +1,34 @@
-from aiogram import Router
-from aiogram.types import Message
-import os
+# handlers/menu_edit.py
+from aiogram import Router, F
+from aiogram.types import CallbackQuery, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from db.mongo import save_menu_texts, get_menu_texts
 
 router = Router()
-ADMINS = os.getenv("ADMINS", "").split(",")
 
-# متن و دکمه‌های منو بصورت دیکشنری ذخیره میشن که ادمین میتونه تغییر بده
-menu_texts = {
-    "main_menu": "به ربات خوش آمدید! یکی از گزینه‌ها را انتخاب کنید:",
-    "free_servers": "📡 دریافت سرور رایگان",
-    "donate": "📬 اهدا سرور",
-    "referral": "🎁 لینک رفرال",
-    "support": "🆘 پشتیبانی",
-    "admin_panel": "🛠 پنل مدیریت",
-    "stats": "📊 آمار ربات",
-}
+class MenuEditState(StatesGroup):
+    waiting_for_texts = State()
 
-@router.message(lambda m: str(m.from_user.id) in ADMINS and m.text and m.text.startswith("/editmenu "))
-async def edit_menu_text(message: Message):
-    # دستور: /editmenu کلید متن جدید
-    parts = message.text.split(" ", 2)
-    if len(parts) < 3:
-        await message.answer("❌ دستور صحیح: /editmenu کلید متن جدید")
-        return
-    key = parts[1]
-    new_text = parts[2]
+@router.callback_query(F.data == "menu_edit")
+async def start_edit(callback: CallbackQuery, state: FSMContext):
+    texts = await get_menu_texts()
+    msg = "📝 متن فعلی منو:\n"
+    for k, v in texts.items():
+        msg += f"{k}: {v}\n"
+    msg += "\nپیام جدید را به صورت:\nkey=value در هر خط بفرستید"
+    await callback.message.answer(msg)
+    await state.set_state(MenuEditState.waiting_for_texts)
+    await callback.answer()
 
-    if key not in menu_texts:
-        await message.answer(f"❌ کلید {key} یافت نشد.")
-        return
-
-    menu_texts[key] = new_text
-    await message.answer(f"✅ متن کلید {key} با موفقیت تغییر کرد.")
+@router.message(MenuEditState.waiting_for_texts)
+async def save_texts(message: Message, state: FSMContext):
+    lines = message.text.split("\n")
+    updated = {}
+    for line in lines:
+        if '=' in line:
+            k, v = line.split('=', 1)
+            updated[k.strip()] = v.strip()
+    await save_menu_texts(updated)
+    await message.answer("✅ منو با موفقیت ویرایش شد.")
+    await state.clear()

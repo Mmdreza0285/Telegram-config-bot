@@ -1,40 +1,24 @@
-from aiogram import Router
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
-from aiogram.filters.callback_data import CallbackData
-import os
+# handlers/admin_panel.py
+from aiogram import Router, F
+from aiogram.types import CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from db.mongo import get_user_count, is_admin
 
 router = Router()
-ADMINS = os.getenv("ADMINS", "").split(",")
 
-class AdminCallback(CallbackData, prefix="admin"):
-    action: str
+@router.callback_query(F.data == "admin_panel")
+async def admin_panel_handler(callback: CallbackQuery):
+    user_id = callback.from_user.id
+    if not await is_admin(user_id):
+        await callback.answer("شما ادمین نیستید.", show_alert=True)
+        return
 
-def admin_keyboard():
-    kb = InlineKeyboardMarkup(row_width=2)
-    kb.add(
-        InlineKeyboardButton("📡 مدیریت سرورها", callback_data=AdminCallback(action="manage_servers").pack()),
-        InlineKeyboardButton("👥 مدیریت ادمین‌ها", callback_data=AdminCallback(action="manage_admins").pack()),
-        InlineKeyboardButton("📊 آمار ربات", callback_data=AdminCallback(action="stats").pack()),
-        InlineKeyboardButton("⚙️ ویرایش منو", callback_data=AdminCallback(action="edit_menu").pack()),
-        InlineKeyboardButton("🗑️ حذف سرورها", callback_data=AdminCallback(action="delete_servers").pack()),
-    )
-    return kb
-
-@router.message(lambda m: str(m.from_user.id) in ADMINS and m.text == "🛠 پنل مدیریت")
-async def show_admin_panel(message: Message):
-    await message.answer("🔧 به پنل مدیریت خوش آمدید.", reply_markup=admin_keyboard())
-
-@router.callback_query(AdminCallback.filter())
-async def admin_callback_handler(callback: CallbackQuery, callback_data: AdminCallback):
-    if callback_data.action == "manage_servers":
-        await callback.message.answer("📡 بخش مدیریت سرورها در دست توسعه است.")
-    elif callback_data.action == "manage_admins":
-        await callback.message.answer("👥 بخش مدیریت ادمین‌ها در دست توسعه است.")
-    elif callback_data.action == "stats":
-        await callback.message.answer("📊 بخش آمار در دست توسعه است.")
-    elif callback_data.action == "edit_menu":
-        await callback.message.answer("⚙️ بخش ویرایش منو در دست توسعه است.")
-    elif callback_data.action == "delete_servers":
-        await callback.message.answer("🗑️ بخش حذف سرورها در دست توسعه است.")
-    else:
-        await callback.message.answer("❌ گزینه نامعتبر است.")
+    user_count = await get_user_count()
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="➕ افزودن ادمین", callback_data="add_admin")],
+        [InlineKeyboardButton(text="📊 آمار ربات", callback_data="stats")],
+        [InlineKeyboardButton(text="📤 پیام همگانی", callback_data="broadcast")],
+        [InlineKeyboardButton(text="🕐 زمان‌بندی ارسال", callback_data="schedule")],
+        [InlineKeyboardButton(text="📝 ویرایش منو", callback_data="menu_edit")]
+    ])
+    await callback.message.answer(f"به پنل مدیریت خوش آمدید. کاربران فعلی: {user_count}", reply_markup=kb)
+    await callback.answer()

@@ -1,35 +1,67 @@
-from aiogram import Router
-import os
+# handlers/schedule.py
 import asyncio
+from aiogram import Router, F
+from aiogram.types import CallbackQuery, Message
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from db.mongo import save_schedule_list, get_scheduled_servers
 
 router = Router()
 
-# اینجا لیست پیام‌های زمان‌بندی شده و کانال‌ها رو نگه می‌داریم
-scheduled_messages = []
-CHANNELS = os.getenv("CHANNELS", "").split(",")
+class ScheduleState(StatesGroup):
+    waiting_for_servers = State()
+    waiting_for_interval = State()
+    waiting_for_message = State()
+    waiting_for_channel = State()
 
-async def scheduler_loop(bot):
+@router.callback_query(F.data == "schedule")
+async def schedule_start(callback: CallbackQuery, state: FSMContext):
+    await callback.message.answer("🔁 لطفاً لیست سرورها را بفرستید. هر سرور در یک خط.")
+    await state.set_state(ScheduleState.waiting_for_servers)
+    await callback.answer()
+
+@router.message(ScheduleState.waiting_for_servers)
+async def schedule_get_servers(message: Message, state: FSMContext):
+    servers = message.text.strip().split("\n")
+    await state.update_data(servers=servers)
+    await message.answer("⏱ لطفاً فاصله بین هر ارسال (به دقیقه) را وارد کنید:")
+    await state.set_state(ScheduleState.waiting_for_interval)
+
+@router.message(ScheduleState.waiting_for_interval)
+async def schedule_get_interval(message: Message, state: FSMContext):
+    try:
+        interval = int(message.text.strip())
+        await state.update_data(interval=interval)
+        await message.answer("📝 لطفاً متن پیام همراه سرور را وارد کنید:")
+        await state.set_state(ScheduleState.waiting_for_message)
+    except:
+        await message.answer("عدد وارد شده نامعتبر است. دوباره تلاش کنید:")
+
+@router.message(ScheduleState.waiting_for_message)
+async def schedule_get_msg(message: Message, state: FSMContext):
+    await state.update_data(text=message.text.strip())
+    await message.answer("📢 لطفاً @آیدی کانال مقصد را وارد کنید:")
+    await state.set_state(ScheduleState.waiting_for_channel)
+
+@router.message(ScheduleState.waiting_for_channel)
+async def schedule_save_all(message: Message, state: FSMContext):
+    data = await state.get_data()
+    servers = data['servers']
+    interval = data['interval']
+    text = data['text']
+    channel = message.text.strip()
+
+    await save_schedule_list(servers, interval, text, channel)
+    await message.answer("✅ ارسال زمان‌بندی شده با موفقیت ذخیره شد.")
+    await state.clear()
+
+# این تابع باید در جای دیگر پروژه در background اجرا شود:
+async def start_scheduler(bot):
     while True:
-        if scheduled_messages and CHANNELS:
-            for msg in scheduled_messages:
-                for channel in CHANNELS:
-                    try:
-                        await bot.send_message(chat_id=channel, text=msg)
-                    except Exception as e:
-                        print(f"خطا در ارسال پیام زمان‌بندی شده به {channel}: {e}")
-                await asyncio.sleep(3600)  # هر ۱ ساعت پیام رو ارسال کن
-        await asyncio.sleep(60)  # هر دقیقه چک کن
-
-@router.message(lambda m: m.text and m.text.startswith("/schedule "))
-async def add_scheduled_message(message):
-    if str(message.from_user.id) not in os.getenv("ADMINS", ""):
-        await message.answer("❌ شما اجازه استفاده از این دستور را ندارید.")
-        return
-
-    text = message.text[10:].strip()
-    if not text:
-        await message.answer("❌ لطفاً متن پیام برای زمان‌بندی را وارد کنید.")
-        return
-
-    scheduled_messages.append(text)
-    await message.answer("✅ پیام برای ارسال خودکار هر ۱ ساعت اضافه شد.")
+        schedules = await get_scheduled_servers()
+        for sched in schedules:
+            if sched['servers']:
+                srv = sched['servers'].pop(0)
+                await bot.send_message(sched['channel'], f"{sched['text']}\n\n<code>{srv}</code>")
+                await save_schedule_list(sched['servers'], sched['interval'], sched['text'], sched['channel'])
+        await asyncio.sleep(60)

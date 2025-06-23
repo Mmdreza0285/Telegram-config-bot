@@ -1,30 +1,36 @@
-
+# main.py
 import asyncio
-import os
 from aiogram import Bot, Dispatcher
-from dotenv import load_dotenv
-
-from handlers import configs, donate, referral, support, admin_panel, schedule, stats, menu_edit
-
-load_dotenv()
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
-
-# ثبت همه روترها
-dp.include_router(configs.router)
-dp.include_router(donate.router)
-dp.include_router(referral.router)
-dp.include_router(support.router)
-dp.include_router(admin_panel.router)
-dp.include_router(schedule.router)
-dp.include_router(stats.router)
-dp.include_router(menu_edit.router)
+from aiogram.enums import ParseMode
+from aiogram.fsm.storage.memory import MemoryStorage
+from config import BOT_TOKEN
+from handlers import (
+    menu, server_handler, donate_handler, referral_handler, client_handler,
+    account_handler, support_handler, admin_handler, schedule_handler,
+    stats_handler, menu_edit_handler
+)
+from handlers.schedule import start_scheduler
 
 async def main():
-    asyncio.create_task(schedule.scheduler_loop(bot))
-    print("ربات شروع به کار کرد...")
+    bot = Bot(token=BOT_TOKEN, parse_mode=ParseMode.HTML)
+    dp = Dispatcher(storage=MemoryStorage())
+
+    dp.include_routers(
+        menu.router,
+        server_handler.router,
+        donate_handler.router,
+        referral_handler.router,
+        client_handler.router,
+        account_handler.router,
+        support_handler.router,
+        admin_handler.router,
+        schedule_handler.router,
+        stats_handler.router,
+        menu_edit_handler.router,
+    )
+
+    asyncio.create_task(start_scheduler(bot))
+
     await dp.start_polling(bot)
 
 if __name__ == "__main__":

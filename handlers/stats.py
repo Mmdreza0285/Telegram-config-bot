@@ -1,13 +1,14 @@
-from aiogram import Router
-from aiogram.types import Message
-import os
+# handlers/stats.py
+from aiogram import Router, F
+from aiogram.types import CallbackQuery
+from db.mongo import get_user_count, get_server_count
 
 router = Router()
-ADMINS = os.getenv("ADMINS", "").split(",")
 
-@router.message(lambda m: str(m.from_user.id) in ADMINS and m.text == "📊 آمار ربات")
-async def show_stats(message: Message):
-    # اینجا فقط آمار پایه رو میدیم (مثال تعداد اعضا)
-    # چون دیتابیس نیست، فقط یه عدد نمونه می‌زنیم
-    member_count = 1234  # جایگزین با داده واقعی
-    await message.answer(f"📊 آمار ربات:\nتعداد کاربران: {member_count}")
+@router.callback_query(F.data == "stats")
+async def stats_handler(callback: CallbackQuery):
+    users = await get_user_count()
+    servers = await get_server_count()
+    msg = f"📊 آمار کلی ربات:\n\n👤 کاربران: {users}\n📦 سرورها: {servers}"
+    await callback.message.answer(msg)
+    await callback.answer()

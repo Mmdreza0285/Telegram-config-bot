@@ -1,8 +1,7 @@
-
 from aiogram import Router
-from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton
-import os
+from aiogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from aiogram.filters.callback_data import CallbackData
+import os
 
 router = Router()
 ADMINS = os.getenv("ADMINS", "").split(",")
@@ -17,6 +16,7 @@ def admin_keyboard():
         InlineKeyboardButton("👥 مدیریت ادمین‌ها", callback_data=AdminCallback(action="manage_admins").pack()),
         InlineKeyboardButton("📊 آمار ربات", callback_data=AdminCallback(action="stats").pack()),
         InlineKeyboardButton("⚙️ ویرایش منو", callback_data=AdminCallback(action="edit_menu").pack()),
+        InlineKeyboardButton("🗑️ حذف سرورها", callback_data=AdminCallback(action="delete_servers").pack()),
     )
     return kb
 
@@ -27,12 +27,14 @@ async def show_admin_panel(message: Message):
 @router.callback_query(AdminCallback.filter())
 async def admin_callback_handler(callback: CallbackQuery, callback_data: AdminCallback):
     if callback_data.action == "manage_servers":
-        await callback.message.answer("📡 بخش مدیریت سرورها (در حال توسعه)")
+        await callback.message.answer("📡 بخش مدیریت سرورها در دست توسعه است.")
     elif callback_data.action == "manage_admins":
-        await callback.message.answer("👥 بخش مدیریت ادمین‌ها (در حال توسعه)")
+        await callback.message.answer("👥 بخش مدیریت ادمین‌ها در دست توسعه است.")
     elif callback_data.action == "stats":
-        await callback.message.answer("📊 نمایش آمار (در حال توسعه)")
+        await callback.message.answer("📊 بخش آمار در دست توسعه است.")
     elif callback_data.action == "edit_menu":
-        await callback.message.answer("⚙️ ویرایش منو (در حال توسعه)")
+        await callback.message.answer("⚙️ بخش ویرایش منو در دست توسعه است.")
+    elif callback_data.action == "delete_servers":
+        await callback.message.answer("🗑️ بخش حذف سرورها در دست توسعه است.")
     else:
         await callback.message.answer("❌ گزینه نامعتبر است.")
